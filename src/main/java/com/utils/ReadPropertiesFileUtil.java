@@ -13,7 +13,7 @@ public class ReadPropertiesFileUtil {
 	private static final String DB_CONFIG_PROPERTIES_FILE = "db_config.properties";
 
 	public static void main(String[] args) {
-		readDbConfig();
+		printProperties(readDbConfig());
 		System.exit(0);
 	}
 

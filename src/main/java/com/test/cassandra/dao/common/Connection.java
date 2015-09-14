@@ -1,4 +1,4 @@
-package com.dao.common;
+package com.test.cassandra.dao.common;
 
 public interface Connection {
 

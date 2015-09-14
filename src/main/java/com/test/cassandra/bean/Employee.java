@@ -1,4 +1,4 @@
-package com.beans;
+package com.test.cassandra.bean;
 
 import java.io.Serializable;
 import java.math.BigInteger;

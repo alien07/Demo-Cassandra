@@ -2,8 +2,8 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.List;
 
-import com.beans.Employee;
-import com.dao.EmployeDao;
+import com.test.cassandra.bean.Employee;
+import com.test.cassandra.dao.EmployeDao;
 import com.utils.ReadPropertiesFileUtil;
 
 public class TestCassandraConnection {
