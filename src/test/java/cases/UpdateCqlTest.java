@@ -6,6 +6,7 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.test.cassandra.bean.Employee;
@@ -15,7 +16,7 @@ public class UpdateCqlTest {
 
 	private Employee employee;
 	private EmployeDao employeDao;
-	
+
 	@BeforeClass
 	public static void setUpBeforeClass() throws Exception {
 	}
@@ -36,6 +37,7 @@ public class UpdateCqlTest {
 	public void tearDown() throws Exception {
 	}
 
+	@Ignore
 	@Test
 	public void updateEmployeeById() throws Exception {
 		employee.setEmail("after_update@test.com");

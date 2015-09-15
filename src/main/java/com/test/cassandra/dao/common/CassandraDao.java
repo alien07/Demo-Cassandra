@@ -14,8 +14,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 
 import javax.persistence.Column;
+import javax.persistence.Id;
 import javax.persistence.Table;
 
 import org.apache.commons.lang3.StringUtils;
@@ -41,6 +43,10 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 	private final Class<T> type;
 	private HashMap<String, String> columns;
 
+	enum METHOD_TYPE {
+		_SAVE, _UPDATE, _SELECT, _DELETE;
+	}
+
 	enum JAVA_TYPE {
 		_String(String.class), _long(long.class), _ByteBuffer(ByteBuffer.class), _boolean(
 				boolean.class), _BigDecimal(BigDecimal.class), _double(
@@ -63,9 +69,9 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		}
 
 		static JAVA_TYPE getEnumType(Class<?> key) {
-			if(values.containsKey(key)){
+			if (values.containsKey(key)) {
 				return values.get(key);
-			}else{
+			} else {
 				return null;
 			}
 		}
@@ -115,7 +121,7 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		List<Object> paramList = new ArrayList<Object>();
 
 		String tableName = getTableName(bean);
-		getFieldAndParamFromBean(bean, columnList, paramList);
+		getFieldAndParamFromBean(METHOD_TYPE._SAVE, bean, columnList, paramList);
 
 		Object param[] = new Object[paramList.size()];
 		Arrays.fill(param, "?");
@@ -141,7 +147,8 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		List<Object> paramList = new ArrayList<Object>();
 
 		String tableName = getTableName(bean);
-		getFieldAndParamFromBean(bean, columnList, paramList);
+		getFieldAndParamFromBean(METHOD_TYPE._UPDATE, bean, columnList,
+				paramList);
 
 		StringBuffer preparedStatement = new StringBuffer();
 		preparedStatement.append("UPDATE ");
@@ -166,7 +173,8 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		// 'Teela');
 
 		String tableName = getTableName(bean);
-		getFieldAndParamFromBean(bean, columnList, paramList);
+		getFieldAndParamFromBean(METHOD_TYPE._DELETE, bean, columnList,
+				paramList);
 
 		StringBuffer preparedStatement = new StringBuffer();
 		preparedStatement.append("DELETE ");
@@ -236,13 +244,13 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 
 	/**
 	 * 
-	 * 
+	 * @param type
 	 * @param bean
 	 * @param columnList
 	 * @param paramList
 	 */
-	private void getFieldAndParamFromBean(T bean, List<String> columnList,
-			List<Object> paramList) {
+	private void getFieldAndParamFromBean(METHOD_TYPE type, T bean,
+			List<String> columnList, List<Object> paramList) {
 		Field[] fields = bean.getClass().getDeclaredFields();
 
 		for (Field f : fields) {
@@ -252,11 +260,21 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 						+ "does not have column anotation");
 				continue;
 			}
+
+			if (METHOD_TYPE._SAVE == type) {
+				Id id = f.getAnnotation(Id.class);
+				if (id != null) {
+					UUID.randomUUID();
+					// UUID uuid = UUIDGenerator.getInstance()
+					// .generateTimeBasedUUID();
+				}
+			}
+
 			String columnName = f.getName();
 
 			Object value = getValueFromClass(bean, columnName);
 			value = prepareValue(value);
-			columnList.add(columnName);
+			columnList.add(column.name());
 			paramList.add(value);
 		}
 	}
