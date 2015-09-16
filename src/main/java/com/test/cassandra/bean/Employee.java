@@ -9,6 +9,8 @@ import javax.persistence.Id;
 import javax.persistence.Index;
 import javax.persistence.Table;
 
+import com.datastax.driver.core.utils.UUIDs;
+
 @Entity
 @Table(name = "emp", indexes = { @Index(columnList = "emp_name"),
 		@Index(columnList = "emp_last_name"), @Index(columnList = "emp_city"),
@@ -26,7 +28,7 @@ public class Employee implements Serializable {
 
 	@Id
 	@Column(name = "emp_id")
-	int id;
+	UUIDs id;
 
 	@Column(name = "emp_city")
 	String city;
@@ -46,11 +48,11 @@ public class Employee implements Serializable {
 	@Column(name = "emp_salary", scale = 13, precision = 2)
 	BigInteger salary;
 
-	public int getId() {
+	public UUIDs getId() {
 		return id;
 	}
 
-	public void setId(int id) {
+	public void setId(UUIDs id) {
 		this.id = id;
 	}
 

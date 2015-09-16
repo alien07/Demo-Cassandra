@@ -8,7 +8,8 @@ import com.test.cassandra.dao.common.CassandraDao;
 public class EmployeDao extends CassandraDao<Employee> {
 
 	public String generate() {
-		UUID dd = UUID.fromString();
+
+		UUID dd = UUID.randomUUID();
 		return dd.toString();
 	}
 }

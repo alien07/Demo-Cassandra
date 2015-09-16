@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.UUID;
 
 import javax.persistence.Column;
 import javax.persistence.Id;
@@ -98,6 +97,26 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		cluster = builder.addContactPoint(prop.getProperty(DB_SERVER_IP))
 				.build();
 		doConect(prop.getProperty(DB_SCHEMA));
+	}
+
+	public void createTable(T bean) {
+		List<Column> columnList = new ArrayList<Column>();
+
+		/*
+		 * CREATE TABLE company.emp ( emp_id timeuuid PRIMARY KEY, emp_city
+		 * text, emp_email text, emp_last_name text, emp_name text, emp_phone
+		 * text, emp_salary varint ) WITH bloom_filter_fp_chance = 0.01 AND
+		 * caching = '{"keys":"ALL", "rows_per_partition":"NONE"}' AND comment =
+		 * '' AND compaction = {'class':
+		 * 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy'}
+		 * AND compression = {'sstable_compression':
+		 * 'org.apache.cassandra.io.compress.LZ4Compressor'} AND
+		 * dclocal_read_repair_chance = 0.1 AND default_time_to_live = 0 AND
+		 * gc_grace_seconds = 864000 AND max_index_interval = 2048 AND
+		 * memtable_flush_period_in_ms = 0 AND min_index_interval = 128 AND
+		 * read_repair_chance = 0.0 AND speculative_retry = '99.0PERCENTILE';
+		 * CREATE INDEX name ON company.emp (emp_name);
+		 */
 	}
 
 	/*
@@ -261,19 +280,19 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 				continue;
 			}
 
+			String columnName = f.getName();
+			Object value = null;
+
+			value = getValueFromClass(bean, columnName);
+			value = prepareValue(value);
+
 			if (METHOD_TYPE._SAVE == type) {
 				Id id = f.getAnnotation(Id.class);
 				if (id != null) {
-					UUID.randomUUID();
-					// UUID uuid = UUIDGenerator.getInstance()
-					// .generateTimeBasedUUID();
+					value = " now() ";
 				}
 			}
 
-			String columnName = f.getName();
-
-			Object value = getValueFromClass(bean, columnName);
-			value = prepareValue(value);
 			columnList.add(column.name());
 			paramList.add(value);
 		}

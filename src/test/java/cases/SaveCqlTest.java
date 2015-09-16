@@ -15,7 +15,7 @@ public class SaveCqlTest {
 
 	private Employee employee;
 	private EmployeDao employeDao;
-	
+
 	@BeforeClass
 	public static void setUpBeforeClass() throws Exception {
 	}
@@ -43,6 +43,7 @@ public class SaveCqlTest {
 	@Test
 	public void saveEmployee() throws Exception {
 		employeDao.save(employee);
+		// Assert.assertTrue(resultSet.isExhausted());
 	}
 
 }
