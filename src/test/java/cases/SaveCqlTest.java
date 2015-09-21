@@ -1,9 +1,11 @@
 package cases;
 
 import java.math.BigInteger;
+import java.util.List;
 
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -43,7 +45,8 @@ public class SaveCqlTest {
 	@Test
 	public void saveEmployee() throws Exception {
 		employeDao.save(employee);
-		// Assert.assertTrue(resultSet.isExhausted());
+		List<Employee> data = employeDao.select(employee);
+		Assert.assertNotNull(data);
 	}
 
 }

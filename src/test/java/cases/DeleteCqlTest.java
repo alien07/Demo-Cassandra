@@ -4,8 +4,10 @@ import java.util.List;
 
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.test.cassandra.bean.Employee;
@@ -15,7 +17,7 @@ public class DeleteCqlTest {
 
 	private Employee employee;
 	private EmployeDao employeDao;
-	
+
 	@BeforeClass
 	public static void setUpBeforeClass() throws Exception {
 	}
@@ -26,9 +28,11 @@ public class DeleteCqlTest {
 
 	@Before
 	public void setUp() throws Exception {
-		String query = "select * from emp";
+		employee = new Employee();
+		employee.setName("Prajak");
 		employeDao = new EmployeDao();
-		List<Employee> data = employeDao.select(query);
+		List<Employee> data = employeDao.select(employee);
+		Assert.assertNotNull(data);
 		employee = data.get(0);
 	}
 
@@ -36,9 +40,16 @@ public class DeleteCqlTest {
 	public void tearDown() throws Exception {
 	}
 
+	@Ignore
 	@Test
 	public void deleteEmployeeWithoutWhereCause() throws Exception {
 		employeDao.delete(employee);
 	}
 
+	@Test
+	public void deleteEmployeeWithBean() throws Exception {
+		employeDao.delete(employee);
+		List<Employee> data = employeDao.select(employee);
+		Assert.assertNull(data);
+	}
 }

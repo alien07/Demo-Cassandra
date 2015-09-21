@@ -39,6 +39,30 @@ public class SelectCqlTest {
 		Assert.assertNotNull(data);
 	}
 
-	
-	
+	@Test
+	public void selectEmployeeWithWhereCause() throws Exception {
+		String query = "select * from emp where emp_name ='Prajak'";
+		EmployeDao employeDao = new EmployeDao();
+
+		List<Employee> data = employeDao.select(query);
+		Assert.assertNotNull(data);
+	}
+
+	@Test
+	public void selectEmployeeWithEmptyBean() throws Exception {
+		EmployeDao employeDao = new EmployeDao();
+		Employee emp = new Employee();
+		List<Employee> data = employeDao.select(emp);
+		Assert.assertNotNull(data);
+	}
+
+	@Test
+	public void selectEmployeeWithBean() throws Exception {
+		EmployeDao employeDao = new EmployeDao();
+		Employee emp = new Employee();
+		emp.setName("Prajak");
+		List<Employee> data = employeDao.select(emp);
+		Assert.assertNotNull(data);
+	}
+
 }

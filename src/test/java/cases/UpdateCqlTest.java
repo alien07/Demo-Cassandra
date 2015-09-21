@@ -4,9 +4,9 @@ import java.util.List;
 
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.test.cassandra.bean.Employee;
@@ -37,11 +37,14 @@ public class UpdateCqlTest {
 	public void tearDown() throws Exception {
 	}
 
-	@Ignore
 	@Test
 	public void updateEmployeeById() throws Exception {
 		employee.setEmail("after_update@test.com");
 		employeDao.update(employee);
+		employee = new Employee();
+		employee.setEmail("after_update@test.com");
+		List<Employee> data = employeDao.select(employee);
+		Assert.assertNull(data);
 	}
 
 }

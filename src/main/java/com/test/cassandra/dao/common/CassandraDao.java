@@ -6,12 +6,16 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.sql.Blob;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
@@ -28,10 +32,24 @@ import com.datastax.driver.core.ColumnDefinitions.Definition;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
+import com.datastax.driver.core.utils.UUIDs;
 import com.utils.ReadPropertiesFileUtil;
 
 public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 
+	private static final String ALLOW_FILTERING = " ALLOW FILTERING ";
+	private static final String STAR_SYMBOL = "*";
+	private static final String SELECT = "SELECT ";
+	private static final String INSERT_INTO = "INSERT INTO ";
+	private static final String VALUES = " VALUES ";
+	private static final String DELETE = "DELETE ";
+	private static final String UPDATE = "UPDATE ";
+	private static final String SET = " SET ";
+	private static final String WHERE = " WHERE ";
+	private static final String FROM = " FROM ";
+	private static final String AND = " AND ";
+	private static final String COMMA_SYMBOL = ",";
+	private static final String EQUAL_SYMBOL = "=";
 	private static final String DB_SCHEMA = "db.schema";
 	private static final String DB_SERVER_IP = "db.server.ip";
 	private Properties prop = ReadPropertiesFileUtil.readDbConfig();
@@ -39,11 +57,13 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 	private Session session;
 	private Builder builder;
 
+	private Set<String> primaryColumn = new HashSet<String>();
+
 	private final Class<T> type;
 	private HashMap<String, String> columns;
 
 	enum METHOD_TYPE {
-		_SAVE, _UPDATE, _SELECT, _DELETE;
+		_SAVE, _UPDATE, _SELECT, _DELETE, _CREATE;
 	}
 
 	enum JAVA_TYPE {
@@ -52,7 +72,7 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 				double.class), _float(float.class), _InetAddress(
 				InetAddress.class), _int(int.class), _List(List.class), _Map(
 				Map.class), _Set(Set.class), _Date(Date.class), _BigInteger(
-				BigInteger.class);
+				BigInteger.class), _UUIDs(UUIDs.class), _blob(Blob.class);
 
 		Class<?> java_type;
 		final static HashMap<Class<?>, JAVA_TYPE> values = new HashMap<Class<?>, CassandraDao.JAVA_TYPE>();
@@ -76,6 +96,62 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		}
 	}
 
+	/**
+	 * 
+	 * 
+	 * <b>Type Constants supported Description</b> <br>
+	 * ascii strings ASCII character string <br>
+	 * bigint integers 64-bit signed long<br>
+	 * blob blobs Arbitrary bytes (no validation)<br>
+	 * boolean booleans true or false<br>
+	 * counter integers Counter column (64-bit signed value). See Counters for
+	 * details<br>
+	 * decimal integers, floats Variable-precision decimal<br>
+	 * double integers 64-bit IEEE-754 floating point<br>
+	 * float integers, floats 32-bit IEEE-754 floating point<br>
+	 * inet strings An IP address. It can be either 4 bytes long (IPv4) or 16
+	 * bytes long (IPv6). There is no inet constant, IP address should be
+	 * inputed as strings<br>
+	 * int integers 32-bit signed int<br>
+	 * text strings UTF8 encoded string<br>
+	 * timestamp integers, strings A timestamp. Strings constant are allow to
+	 * input timestamps as dates, see Working with dates below for more
+	 * information.<br>
+	 * timeuuid uuids Type 1 UUID. This is generally used as a “conflict-free”
+	 * timestamp. Also see the functions on Timeuuid<br>
+	 * uuid uuids Type 1 or type 4 UUID<br>
+	 * varchar strings UTF8 encoded string<br>
+	 * varint integers Arbitrary-precision integer<br>
+	 * 
+	 * @author Alien
+	 *
+	 */
+	enum CQL_TYPE {
+		_uuid("uuid"), _blob("blob"), _boolean("boolean"), _decimal("decimal"), _text(
+				"text"), _varchar("varchar"), _int("int"), _varint("varint");
+
+		String cql_type;
+		final static HashMap<String, CQL_TYPE> values = new HashMap<String, CassandraDao.CQL_TYPE>();
+
+		static {
+			for (CQL_TYPE type : CQL_TYPE.values()) {
+				values.put(type.cql_type, type);
+			}
+		}
+
+		CQL_TYPE(String type) {
+			this.cql_type = type;
+		}
+
+		static CQL_TYPE getEnumType(String key) {
+			if (values.containsKey(key)) {
+				return values.get(key);
+			} else {
+				return null;
+			}
+		}
+	}
+
 	public CassandraDao(Class<T> type) {
 		this.type = type;
 	}
@@ -90,9 +166,12 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 	}
 
 	@SuppressWarnings("unchecked")
-	public CassandraDao() {
+	public CassandraDao() throws SecurityException, InstantiationException,
+			IllegalAccessException {
 		this.type = (Class<T>) ((ParameterizedType) getClass()
 				.getGenericSuperclass()).getActualTypeArguments()[0];
+		getColumnMappingWithField();
+
 		builder = Cluster.builder();
 		cluster = builder.addContactPoint(prop.getProperty(DB_SERVER_IP))
 				.build();
@@ -100,14 +179,41 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 	}
 
 	public void createTable(T bean) {
-		List<Column> columnList = new ArrayList<Column>();
+		//
+		// List<String> columnList = new ArrayList<String>();
+		//
+		// String tableName = getTableName(bean);
+		// getFieldCreate(bean, columnList);
+		//
+		// StringBuffer preparedStatement = new StringBuffer();
+		// preparedStatement.append("CREATE TABLE ");
+		// preparedStatement.append(tableName).append(" ( ")
+		// .append(StringUtils.join(columnList, ",")).append(" ) ");
+		// preparedStatement.append(" VALUES ");
+		// preparedStatement.append(" ( ")
+		// .append(StringUtils.join(paramList, ",")).append(" ) ");
+		//
+		// System.out.println("save preparedStatement:"
+		// + preparedStatement.toString());
+		// System.out.println("values:" + paramList);
+		// ResultSet resultSet = executeQuery(preparedStatement.toString());
+		// System.out.println("result:" + resultSet);
 
 		/*
+		 * 
+		 * 
+		 * CREATE TABLE test ( pk int, t int, v text, s text static, PRIMARY KEY
+		 * (pk, t) );
+		 * 
+		 * 
 		 * CREATE TABLE company.emp ( emp_id timeuuid PRIMARY KEY, emp_city
 		 * text, emp_email text, emp_last_name text, emp_name text, emp_phone
-		 * text, emp_salary varint ) WITH bloom_filter_fp_chance = 0.01 AND
-		 * caching = '{"keys":"ALL", "rows_per_partition":"NONE"}' AND comment =
-		 * '' AND compaction = {'class':
+		 * text, emp_salary varint )
+		 * 
+		 * 
+		 * WITH bloom_filter_fp_chance = 0.01 AND caching = '{"keys":"ALL",
+		 * "rows_per_partition":"NONE"}' AND comment = '' AND compaction =
+		 * {'class':
 		 * 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy'}
 		 * AND compression = {'sstable_compression':
 		 * 'org.apache.cassandra.io.compress.LZ4Compressor'} AND
@@ -115,8 +221,36 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		 * gc_grace_seconds = 864000 AND max_index_interval = 2048 AND
 		 * memtable_flush_period_in_ms = 0 AND min_index_interval = 128 AND
 		 * read_repair_chance = 0.0 AND speculative_retry = '99.0PERCENTILE';
+		 * 
 		 * CREATE INDEX name ON company.emp (emp_name);
 		 */
+	}
+
+	@Override
+	public List<T> select(T bean) throws Exception {
+		List<T> result = new ArrayList<T>();
+		List<String> columnList = new ArrayList<String>();
+		List<Object> paramList = new ArrayList<Object>();
+
+		String tableName = getTableName(bean);
+		HashMap<Field, Object> fieldsMap = getFieldAndParamFromBean(
+				METHOD_TYPE._SELECT, bean, columnList, paramList);
+
+		Object param[] = new Object[paramList.size()];
+		Arrays.fill(param, "?");
+
+		StringBuffer preparedStatement = new StringBuffer();
+		preparedStatement.append(SELECT).append(STAR_SYMBOL).append(FROM);
+		preparedStatement.append(tableName).append(" ");
+
+		if (hashId(fieldsMap)) {
+			preparedStatement.append(generateWhereCauseById(fieldsMap));
+		} else {
+			preparedStatement.append(generateWhereCause(columnList, paramList));
+		}
+
+		result = select(preparedStatement.toString());
+		return result;
 	}
 
 	/*
@@ -146,17 +280,21 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		Arrays.fill(param, "?");
 
 		StringBuffer preparedStatement = new StringBuffer();
-		preparedStatement.append("INSERT INTO ");
+		preparedStatement.append(INSERT_INTO);
 		preparedStatement.append(tableName).append(" ( ")
-				.append(StringUtils.join(columnList, ",")).append(" ) ");
-		preparedStatement.append(" VALUES ");
+				.append(StringUtils.join(columnList, COMMA_SYMBOL))
+				.append(" ) ");
+		preparedStatement.append(VALUES);
 		preparedStatement.append(" ( ")
-				.append(StringUtils.join(paramList, ",")).append(" ) ");
+				.append(StringUtils.join(paramList, COMMA_SYMBOL))
+				.append(" ) ");
+		save(preparedStatement.toString());
+	}
 
-		System.out.println("save preparedStatement:"
-				+ preparedStatement.toString());
-		System.out.println("values:" + paramList);
-		ResultSet resultSet = executeQuery(preparedStatement.toString());
+	@Override
+	public void save(String query) throws Exception {
+		System.out.println("save query:" + query);
+		ResultSet resultSet = executeQuery(query);
 		System.out.println("result:" + resultSet);
 	}
 
@@ -166,68 +304,67 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		List<Object> paramList = new ArrayList<Object>();
 
 		String tableName = getTableName(bean);
-		getFieldAndParamFromBean(METHOD_TYPE._UPDATE, bean, columnList,
-				paramList);
+		HashMap<Field, Object> fieldsMap = getFieldAndParamFromBean(
+				METHOD_TYPE._UPDATE, bean, columnList, paramList);
 
 		StringBuffer preparedStatement = new StringBuffer();
-		preparedStatement.append("UPDATE ");
-		preparedStatement.append(tableName).append(" SET ");
+		preparedStatement.append(UPDATE);
+		preparedStatement.append(tableName).append(SET);
 		preparedStatement.append(generateSetUpdate(columnList, paramList));
+		preparedStatement.append(tableName);
+		if (hashId(fieldsMap)) {
+			preparedStatement.append(generateWhereCauseById(fieldsMap));
+		} else {
+			preparedStatement.append(generateWhereCause(columnList, paramList));
+		}
 
-		System.out.println("update preparedStatement:"
-				+ preparedStatement.toString());
-		System.out.println("values:" + paramList);
-		ResultSet resultSet = executeQuery(preparedStatement.toString());
+		update(preparedStatement.toString());
+	}
+
+	@Override
+	public void update(String query) throws Exception {
+		System.out.println("update query:" + query);
+		ResultSet resultSet = executeQuery(query);
 		System.out.println("result:" + resultSet);
 	}
 
 	@Override
 	public void delete(T bean) throws Exception {
+		delete(null, bean);
+	}
+
+	public void delete(List<String> column, T bean) throws Exception {
 		List<String> columnList = new ArrayList<String>();
 		List<Object> paramList = new ArrayList<Object>();
 
-		// DELETE col1, col2, col3 FROM Planeteers WHERE userID = 'Captain';
-
-		// DELETE FROM MastersOfTheUniverse WHERE mastersID IN ('Man-At-Arms',
-		// 'Teela');
+		String deleteColumn = StringUtils.EMPTY;
+		if (!Objects.isNull(column)) {
+			deleteColumn = StringUtils.defaultString(
+					StringUtils.join(column, COMMA_SYMBOL), StringUtils.EMPTY);
+		}
 
 		String tableName = getTableName(bean);
-		getFieldAndParamFromBean(METHOD_TYPE._DELETE, bean, columnList,
-				paramList);
+		HashMap<Field, Object> fieldsMap = getFieldAndParamFromBean(
+				METHOD_TYPE._DELETE, bean, columnList, paramList);
 
 		StringBuffer preparedStatement = new StringBuffer();
-		preparedStatement.append("DELETE ");
-		preparedStatement.append(tableName).append(" FROM ");
-		preparedStatement.append(generateSetUpdate(columnList, paramList));
+		preparedStatement.append(DELETE);
+		preparedStatement.append(deleteColumn);
+		preparedStatement.append(FROM).append(tableName);
+		if (hashId(fieldsMap)) {
+			preparedStatement.append(generateWhereCauseById(fieldsMap));
+		} else {
+			preparedStatement.append(generateWhereCause(columnList, paramList));
+		}
 
-		System.out.println("delete preparedStatement:"
-				+ preparedStatement.toString());
-		System.out.println("values:" + paramList);
-		ResultSet resultSet = executeQuery(preparedStatement.toString());
-		System.out.println("result:" + resultSet);
+		delete(preparedStatement.toString());
 	}
 
-	private String generateSetUpdate(List<String> columnList,
-			List<Object> paramList) {
-
-		List<String> set = new ArrayList<String>();
-
-		if (columnList == null) {
-			return StringUtils.EMPTY;
-		}
-
-		int count = columnList.size();
-		for (int index = 0; index < count; index++) {
-			Object value = paramList.get(index);
-			if (value == null) {
-				continue;
-			}
-			StringBuffer result = new StringBuffer(StringUtils.EMPTY);
-			result.append(columnList.get(index)).append("=").append(value);
-			set.add(result.toString());
-		}
-
-		return StringUtils.join(set, ",");
+	@Override
+	public void delete(String query) throws Exception {
+		System.out.println("delete query:" + query);
+		ResultSet resultSet = executeQuery(query);
+		System.out.println("result:" + resultSet);
 	}
 
 	// ================ public ==============
@@ -242,11 +379,124 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		return session;
 	}
 
-	public ResultSet executeQuery(String query) {
+	// ================ private ==============
+
+	private ResultSet executeQuery(String query) {
+		System.out.println("Fninal query:" + query);
 		return session.execute(query);
 	}
 
-	// ================ private ==============
+	private boolean hashId(HashMap<Field, Object> fields) {
+		boolean result = false;
+		for (Entry<Field, Object> set : fields.entrySet()) {
+			Field field = set.getKey();
+			Id id = field.getAnnotation(Id.class);
+
+			if (Objects.isNull(id)) {
+				continue;
+			}
+			Object value = set.getValue();
+			if (!Objects.isNull(value)) {
+				return true;
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Generate where cause by value not null.
+	 * 
+	 * @param columnList
+	 * @param paramList
+	 * @return
+	 */
+	private String generateWhereCause(List<String> columnList,
+			List<Object> paramList) {
+		StringBuilder result;
+		List<String> whereCause = new ArrayList<String>();
+
+		for (int index = 0; index < columnList.size(); index++) {
+			String colunmName = columnList.get(index);
+			Object value = paramList.get(index);
+
+			if (Objects.isNull(value)) {
+				continue;
+			}
+			StringBuffer condition = new StringBuffer();
+			condition.append(colunmName).append(EQUAL_SYMBOL).append(value);
+			whereCause.add(condition.toString());
+		}
+
+		result = new StringBuilder(StringUtils.join(whereCause, AND));
+		if (StringUtils.isNotEmpty(result.toString())) {
+			result.insert(0, WHERE);
+			if (whereCause.size() > 1) {
+				result.append(ALLOW_FILTERING);
+			}
+		}
+
+		return result.toString();
+	}
+
+	private String generateWhereCauseById(HashMap<Field, Object> fieldsMap) {
+
+		StringBuilder result;
+		List<String> whereCause = new ArrayList<String>();
+
+		for (Entry<Field, Object> set : fieldsMap.entrySet()) {
+			Field field = set.getKey();
+			Id id = field.getAnnotation(Id.class);
+
+			if (Objects.isNull(id)) {
+				continue;
+			}
+			Object value = set.getValue();
+			value = prepareValue(value);
+			if (!Objects.isNull(value)) {
+				StringBuffer condition = new StringBuffer();
+				Column column = field.getAnnotation(Column.class);
+				String columnName = field.getName();
+				if (!Objects.isNull(column)) {
+					columnName = StringUtils.defaultString(column.name(),
+							columnName);
+				}
+				condition.append(columnName).append(EQUAL_SYMBOL).append(value);
+				whereCause.add(condition.toString());
+			}
+		}
+
+		result = new StringBuilder(StringUtils.join(whereCause, AND));
+		if (StringUtils.isNotEmpty(result.toString())) {
+			result.insert(0, WHERE);
+		}
+
+		return result.toString();
+
+	}
+
+	private String generateSetUpdate(List<String> columnList,
+			List<Object> paramList) {
+
+		List<String> set = new ArrayList<String>();
+
+		if (columnList == null) {
+			return StringUtils.EMPTY;
+		}
+
+		int count = columnList.size();
+		for (int index = 0; index < count; index++) {
+			Object value = paramList.get(index);
+			// TODO Skip key
+			if (value == null || primaryColumn.contains(o)) {
+				continue;
+			}
+			StringBuffer result = new StringBuffer(StringUtils.EMPTY);
+			result.append(columnList.get(index)).append(EQUAL_SYMBOL)
+					.append(value);
+			set.add(result.toString());
+		}
+		return StringUtils.join(set, COMMA_SYMBOL);
+	}
 
 	/**
 	 * get table name from bean
@@ -267,10 +517,12 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 	 * @param bean
 	 * @param columnList
 	 * @param paramList
+	 * @return
 	 */
-	private void getFieldAndParamFromBean(METHOD_TYPE type, T bean,
-			List<String> columnList, List<Object> paramList) {
+	private HashMap<Field, Object> getFieldAndParamFromBean(METHOD_TYPE type,
+			T bean, List<String> columnList, List<Object> paramList) {
 		Field[] fields = bean.getClass().getDeclaredFields();
+		HashMap<Field, Object> result = new HashMap<Field, Object>();
 
 		for (Field f : fields) {
 			Column column = f.getAnnotation(Column.class);
@@ -288,14 +540,37 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 
 			if (METHOD_TYPE._SAVE == type) {
 				Id id = f.getAnnotation(Id.class);
-				if (id != null) {
+				if (!Objects.isNull(id)) {
 					value = " now() ";
 				}
 			}
 
 			columnList.add(column.name());
 			paramList.add(value);
+			result.put(f, value);
 		}
+		return result;
+	}
+
+	private void getFieldCreate(T bean, List<String> columns) {
+		Field[] fields = bean.getClass().getDeclaredFields();
+		for (Field f : fields) {
+			Column column = f.getAnnotation(Column.class);
+			if (column == null) {
+				System.out.println("ERROR " + f.getName()
+						+ "does not have column anotation");
+				continue;
+			}
+
+			// ( pk int, t int, v text, s text static, PRIMARY KEY
+			// (pk, t) )
+
+			StringBuffer columnText = new StringBuffer(column.name());
+			// TODO mapping type java classandra
+			columnText.append(" ").append(f.getType());
+			columns.add(column.name());
+		}
+
 	}
 
 	private Object prepareValue(Object value) {
@@ -380,6 +655,11 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 				key = column.name();
 			}
 			result.put(key, value);
+
+			Id id = f.getAnnotation(Id.class);
+			if (!Objects.isNull(id)) {
+				primaryColumn.add(key);
+			}
 		}
 
 		return result;

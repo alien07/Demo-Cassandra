@@ -2,14 +2,13 @@ package com.test.cassandra.bean;
 
 import java.io.Serializable;
 import java.math.BigInteger;
+import java.util.UUID;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Index;
 import javax.persistence.Table;
-
-import com.datastax.driver.core.utils.UUIDs;
 
 @Entity
 @Table(name = "emp", indexes = { @Index(columnList = "emp_name"),
@@ -28,7 +27,7 @@ public class Employee implements Serializable {
 
 	@Id
 	@Column(name = "emp_id")
-	UUIDs id;
+	UUID id;
 
 	@Column(name = "emp_city")
 	String city;
@@ -48,11 +47,11 @@ public class Employee implements Serializable {
 	@Column(name = "emp_salary", scale = 13, precision = 2)
 	BigInteger salary;
 
-	public UUIDs getId() {
+	public UUID getId() {
 		return id;
 	}
 
-	public void setId(UUIDs id) {
+	public void setId(UUID id) {
 		this.id = id;
 	}
 
