@@ -166,11 +166,18 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 	}
 
 	@SuppressWarnings("unchecked")
-	public CassandraDao() throws SecurityException, InstantiationException,
-			IllegalAccessException {
+	public CassandraDao() {
 		this.type = (Class<T>) ((ParameterizedType) getClass()
 				.getGenericSuperclass()).getActualTypeArguments()[0];
-		getColumnMappingWithField();
+		try {
+			getColumnMappingWithField();
+		} catch (SecurityException e) {
+			e.printStackTrace();
+		} catch (InstantiationException e) {
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
+		}
 
 		builder = Cluster.builder();
 		cluster = builder.addContactPoint(prop.getProperty(DB_SERVER_IP))
@@ -311,7 +318,6 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		preparedStatement.append(UPDATE);
 		preparedStatement.append(tableName).append(SET);
 		preparedStatement.append(generateSetUpdate(columnList, paramList));
-		preparedStatement.append(tableName);
 		if (hashId(fieldsMap)) {
 			preparedStatement.append(generateWhereCauseById(fieldsMap));
 		} else {
@@ -486,13 +492,13 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		int count = columnList.size();
 		for (int index = 0; index < count; index++) {
 			Object value = paramList.get(index);
-			// TODO Skip key
-			if (value == null || primaryColumn.contains(o)) {
+			String key = columnList.get(index);
+
+			if (value == null || primaryColumn.contains(key)) {
 				continue;
 			}
 			StringBuffer result = new StringBuffer(StringUtils.EMPTY);
-			result.append(columnList.get(index)).append(EQUAL_SYMBOL)
-					.append(value);
+			result.append(key).append(EQUAL_SYMBOL).append(value);
 			set.add(result.toString());
 		}
 		return StringUtils.join(set, COMMA_SYMBOL);

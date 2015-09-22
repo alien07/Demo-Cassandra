@@ -44,7 +44,7 @@ public class UpdateCqlTest {
 		employee = new Employee();
 		employee.setEmail("after_update@test.com");
 		List<Employee> data = employeDao.select(employee);
-		Assert.assertNull(data);
+		Assert.assertNotNull(data);
 	}
 
 }
