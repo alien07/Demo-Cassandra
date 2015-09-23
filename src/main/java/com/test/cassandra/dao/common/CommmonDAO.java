@@ -10,13 +10,19 @@ public interface CommmonDAO<T> {
 
 	void save(T t) throws Exception;
 
+	void multiSave(List<T> t) throws Exception;
+
 	void save(String query) throws Exception;
 
 	void update(T t) throws Exception;
 
+	void multiUpdate(List<T> t) throws Exception;
+
 	void update(String query) throws Exception;
 
 	void delete(T t) throws Exception;
+
+	void multiDelete(List<T> t) throws Exception;
 
 	void delete(String query) throws Exception;
 

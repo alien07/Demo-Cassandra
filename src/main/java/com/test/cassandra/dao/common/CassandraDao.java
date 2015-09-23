@@ -37,64 +37,8 @@ import com.utils.ReadPropertiesFileUtil;
 
 public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 
-	private static final String ALLOW_FILTERING = " ALLOW FILTERING ";
-	private static final String STAR_SYMBOL = "*";
-	private static final String SELECT = "SELECT ";
-	private static final String INSERT_INTO = "INSERT INTO ";
-	private static final String VALUES = " VALUES ";
-	private static final String DELETE = "DELETE ";
-	private static final String UPDATE = "UPDATE ";
-	private static final String SET = " SET ";
-	private static final String WHERE = " WHERE ";
-	private static final String FROM = " FROM ";
-	private static final String AND = " AND ";
-	private static final String COMMA_SYMBOL = ",";
-	private static final String EQUAL_SYMBOL = "=";
-	private static final String DB_SCHEMA = "db.schema";
-	private static final String DB_SERVER_IP = "db.server.ip";
-	private Properties prop = ReadPropertiesFileUtil.readDbConfig();
-	private Cluster cluster;
-	private Session session;
-	private Builder builder;
-
-	private Set<String> primaryColumn = new HashSet<String>();
-
-	private final Class<T> type;
-	private HashMap<String, String> columns;
-
-	enum METHOD_TYPE {
-		_SAVE, _UPDATE, _SELECT, _DELETE, _CREATE;
-	}
-
-	enum JAVA_TYPE {
-		_String(String.class), _long(long.class), _ByteBuffer(ByteBuffer.class), _boolean(
-				boolean.class), _BigDecimal(BigDecimal.class), _double(
-				double.class), _float(float.class), _InetAddress(
-				InetAddress.class), _int(int.class), _List(List.class), _Map(
-				Map.class), _Set(Set.class), _Date(Date.class), _BigInteger(
-				BigInteger.class), _UUIDs(UUIDs.class), _blob(Blob.class);
-
-		Class<?> java_type;
-		final static HashMap<Class<?>, JAVA_TYPE> values = new HashMap<Class<?>, CassandraDao.JAVA_TYPE>();
-
-		static {
-			for (JAVA_TYPE type : JAVA_TYPE.values()) {
-				values.put(type.java_type, type);
-			}
-		}
-
-		JAVA_TYPE(Class<?> type) {
-			this.java_type = type;
-		}
-
-		static JAVA_TYPE getEnumType(Class<?> key) {
-			if (values.containsKey(key)) {
-				return values.get(key);
-			} else {
-				return null;
-			}
-		}
-	}
+	private static final String APPLY_BATCH = "APPLY BATCH";
+	private static final String BEGIN_BATCH = "BEGIN BATCH";
 
 	/**
 	 * 
@@ -127,20 +71,14 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 	 *
 	 */
 	enum CQL_TYPE {
-		_uuid("uuid"), _blob("blob"), _boolean("boolean"), _decimal("decimal"), _text(
-				"text"), _varchar("varchar"), _int("int"), _varint("varint");
+		_blob("blob"), _boolean("boolean"), _decimal("decimal"), _int("int"), _text(
+				"text"), _uuid("uuid"), _varchar("varchar"), _varint("varint");
 
-		String cql_type;
 		final static HashMap<String, CQL_TYPE> values = new HashMap<String, CassandraDao.CQL_TYPE>();
-
 		static {
 			for (CQL_TYPE type : CQL_TYPE.values()) {
 				values.put(type.cql_type, type);
 			}
-		}
-
-		CQL_TYPE(String type) {
-			this.cql_type = type;
 		}
 
 		static CQL_TYPE getEnumType(String key) {
@@ -150,20 +88,75 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 				return null;
 			}
 		}
+
+		String cql_type;
+
+		CQL_TYPE(String type) {
+			this.cql_type = type;
+		}
 	}
 
-	public CassandraDao(Class<T> type) {
-		this.type = type;
+	enum JAVA_TYPE {
+		_BigDecimal(BigDecimal.class), _BigInteger(BigInteger.class), _blob(
+				Blob.class), _boolean(boolean.class), _ByteBuffer(
+				ByteBuffer.class), _Date(Date.class), _double(double.class), _float(
+				float.class), _InetAddress(InetAddress.class), _int(int.class), _List(
+				List.class), _long(long.class), _Map(Map.class), _Set(Set.class), _String(
+				String.class), _UUIDs(UUIDs.class);
+
+		final static HashMap<Class<?>, JAVA_TYPE> values = new HashMap<Class<?>, CassandraDao.JAVA_TYPE>();
+		static {
+			for (JAVA_TYPE type : JAVA_TYPE.values()) {
+				values.put(type.java_type, type);
+			}
+		}
+
+		static JAVA_TYPE getEnumType(Class<?> key) {
+			if (values.containsKey(key)) {
+				return values.get(key);
+			} else {
+				return null;
+			}
+		}
+
+		Class<?> java_type;
+
+		JAVA_TYPE(Class<?> type) {
+			this.java_type = type;
+		}
 	}
 
-	public Class<T> getType() {
-		return this.type;
+	enum METHOD_TYPE {
+		_CREATE, _DELETE, _SAVE, _SELECT, _UPDATE;
 	}
 
-	@Override
-	public Connection connection() {
-		return this;
-	}
+	private static final String ALLOW_FILTERING = " ALLOW FILTERING ";
+	private static final String AND = " AND ";
+	private static final String COMMA_SYMBOL = ",";
+	private static final String DB_SCHEMA = "db.schema";
+	private static final String DB_SERVER_IP = "db.server.ip";
+	private static final String DELETE = "DELETE ";
+	private static final String EQUAL_SYMBOL = "=";
+	private static final String FROM = " FROM ";
+	private static final String INSERT_INTO = "INSERT INTO ";
+	private static final String SELECT = "SELECT ";
+	private static final String SET = " SET ";
+	private static final String STAR_SYMBOL = "*";
+	private static final String UPDATE = "UPDATE ";
+	private static final String VALUES = " VALUES ";
+	private static final String WHERE = " WHERE ";
+	private Builder builder;
+
+	private Cluster cluster;
+
+	private HashMap<String, String> columns;
+	private Set<String> primaryColumn = new HashSet<String>();
+
+	private Properties prop = ReadPropertiesFileUtil.readDbConfig();
+
+	private Session session;
+
+	private final Class<T> type;
 
 	@SuppressWarnings("unchecked")
 	public CassandraDao() {
@@ -183,6 +176,15 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		cluster = builder.addContactPoint(prop.getProperty(DB_SERVER_IP))
 				.build();
 		doConect(prop.getProperty(DB_SCHEMA));
+	}
+
+	public CassandraDao(Class<T> type) {
+		this.type = type;
+	}
+
+	@Override
+	public Connection connection() {
+		return this;
 	}
 
 	public void createTable(T bean) {
@@ -233,113 +235,41 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		 */
 	}
 
-	@Override
-	public List<T> select(T bean) throws Exception {
-		List<T> result = new ArrayList<T>();
-		List<String> columnList = new ArrayList<String>();
-		List<Object> paramList = new ArrayList<Object>();
-
-		String tableName = getTableName(bean);
-		HashMap<Field, Object> fieldsMap = getFieldAndParamFromBean(
-				METHOD_TYPE._SELECT, bean, columnList, paramList);
-
-		Object param[] = new Object[paramList.size()];
-		Arrays.fill(param, "?");
-
-		StringBuffer preparedStatement = new StringBuffer();
-		preparedStatement.append(SELECT).append(STAR_SYMBOL).append(FROM);
-		preparedStatement.append(tableName).append(" ");
-
-		if (hashId(fieldsMap)) {
-			preparedStatement.append(generateWhereCauseById(fieldsMap));
-		} else {
-			preparedStatement.append(generateWhereCause(columnList, paramList));
-		}
-
-		result = select(preparedStatement.toString());
-		return result;
-	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see com.dao.CommmonDAO#select(java.lang.String)
-	 */
-	@Override
-	public List<T> select(String query) throws Exception {
-		List<T> result = new ArrayList<T>();
-		ResultSet resultSet = executeQuery(query);
-		result = setDataToBean(resultSet);
-		printData(resultSet.getColumnDefinitions(), result);
-		return result;
+	public void delete(List<String> opsDeleteColumn, T bean) throws Exception {
+		StringBuffer preparedStatement = generateDeleteStatement(
+				opsDeleteColumn, bean);
+		delete(preparedStatement.toString());
 	}
 
 	@Override
-	public void save(T bean) throws Exception {
-
-		List<String> columnList = new ArrayList<String>();
-		List<Object> paramList = new ArrayList<Object>();
-
-		String tableName = getTableName(bean);
-		getFieldAndParamFromBean(METHOD_TYPE._SAVE, bean, columnList, paramList);
-
-		Object param[] = new Object[paramList.size()];
-		Arrays.fill(param, "?");
-
-		StringBuffer preparedStatement = new StringBuffer();
-		preparedStatement.append(INSERT_INTO);
-		preparedStatement.append(tableName).append(" ( ")
-				.append(StringUtils.join(columnList, COMMA_SYMBOL))
-				.append(" ) ");
-		preparedStatement.append(VALUES);
-		preparedStatement.append(" ( ")
-				.append(StringUtils.join(paramList, COMMA_SYMBOL))
-				.append(" ) ");
-		save(preparedStatement.toString());
-	}
-
-	@Override
-	public void save(String query) throws Exception {
-		System.out.println("save query:" + query);
-		ResultSet resultSet = executeQuery(query);
-		System.out.println("result:" + resultSet);
-	}
-
-	@Override
-	public void update(T bean) throws Exception {
-		List<String> columnList = new ArrayList<String>();
-		List<Object> paramList = new ArrayList<Object>();
-
-		String tableName = getTableName(bean);
-		HashMap<Field, Object> fieldsMap = getFieldAndParamFromBean(
-				METHOD_TYPE._UPDATE, bean, columnList, paramList);
-
-		StringBuffer preparedStatement = new StringBuffer();
-		preparedStatement.append(UPDATE);
-		preparedStatement.append(tableName).append(SET);
-		preparedStatement.append(generateSetUpdate(columnList, paramList));
-		if (hashId(fieldsMap)) {
-			preparedStatement.append(generateWhereCauseById(fieldsMap));
-		} else {
-			preparedStatement.append(generateWhereCause(columnList, paramList));
-		}
-
-		update(preparedStatement.toString());
-	}
-
-	@Override
-	public void update(String query) throws Exception {
-		System.out.println("update query:" + query);
+	public void delete(String query) throws Exception {
+		System.out.println("delete query:" + query);
 		ResultSet resultSet = executeQuery(query);
 		System.out.println("result:" + resultSet);
 	}
 
 	@Override
 	public void delete(T bean) throws Exception {
-		delete(null, bean);
+		List<String> opsDeleteColumn = null;
+		delete(opsDeleteColumn, bean);
 	}
 
-	public void delete(List<String> column, T bean) throws Exception {
+	public Session doConect() {
+		session = cluster.connect();
+		return session;
+	}
+
+	public Session doConect(String keyspaceName) {
+		session = cluster.connect(keyspaceName);
+		return session;
+	}
+
+	private ResultSet executeQuery(String query) {
+		System.out.println("Fninal query:" + query);
+		return session.execute(query);
+	}
+
+	private StringBuffer generateDeleteStatement(List<String> column, T bean) {
 		List<String> columnList = new ArrayList<String>();
 		List<Object> paramList = new ArrayList<Object>();
 
@@ -362,51 +292,96 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		} else {
 			preparedStatement.append(generateWhereCause(columnList, paramList));
 		}
-
-		delete(preparedStatement.toString());
+		return preparedStatement;
 	}
 
-	@Override
-	public void delete(String query) throws Exception {
-		System.out.println("delete query:" + query);
-		ResultSet resultSet = executeQuery(query);
-		System.out.println("result:" + resultSet);
+	private StringBuffer generateSaveStatement(T bean) {
+		List<String> columnList = new ArrayList<String>();
+		List<Object> paramList = new ArrayList<Object>();
+
+		String tableName = getTableName(bean);
+		getFieldAndParamFromBean(METHOD_TYPE._SAVE, bean, columnList, paramList);
+
+		Object param[] = new Object[paramList.size()];
+		Arrays.fill(param, "?");
+
+		StringBuffer preparedStatement = new StringBuffer();
+		preparedStatement.append(INSERT_INTO);
+		preparedStatement.append(tableName).append(" ( ")
+				.append(StringUtils.join(columnList, COMMA_SYMBOL))
+				.append(" ) ");
+		preparedStatement.append(VALUES);
+		preparedStatement.append(" ( ")
+				.append(StringUtils.join(paramList, COMMA_SYMBOL))
+				.append(" ) ");
+		return preparedStatement;
 	}
 
-	// ================ public ==============
+	private StringBuffer generateSelectStatement(T bean) {
+		List<String> columnList = new ArrayList<String>();
+		List<Object> paramList = new ArrayList<Object>();
 
-	public Session doConect() {
-		session = cluster.connect();
-		return session;
+		String tableName = getTableName(bean);
+		HashMap<Field, Object> fieldsMap = getFieldAndParamFromBean(
+				METHOD_TYPE._SELECT, bean, columnList, paramList);
+
+		Object param[] = new Object[paramList.size()];
+		Arrays.fill(param, "?");
+
+		StringBuffer preparedStatement = new StringBuffer();
+		preparedStatement.append(SELECT).append(STAR_SYMBOL).append(FROM);
+		preparedStatement.append(tableName).append(" ");
+
+		if (hashId(fieldsMap)) {
+			preparedStatement.append(generateWhereCauseById(fieldsMap));
+		} else {
+			preparedStatement.append(generateWhereCause(columnList, paramList));
+		}
+		return preparedStatement;
 	}
 
-	public Session doConect(String keyspaceName) {
-		session = cluster.connect(keyspaceName);
-		return session;
-	}
+	private String generateSetUpdate(List<String> columnList,
+			List<Object> paramList) {
 
-	// ================ private ==============
+		List<String> set = new ArrayList<String>();
 
-	private ResultSet executeQuery(String query) {
-		System.out.println("Fninal query:" + query);
-		return session.execute(query);
-	}
+		if (columnList == null) {
+			return StringUtils.EMPTY;
+		}
 
-	private boolean hashId(HashMap<Field, Object> fields) {
-		boolean result = false;
-		for (Entry<Field, Object> set : fields.entrySet()) {
-			Field field = set.getKey();
-			Id id = field.getAnnotation(Id.class);
+		int count = columnList.size();
+		for (int index = 0; index < count; index++) {
+			Object value = paramList.get(index);
+			String key = columnList.get(index);
 
-			if (Objects.isNull(id)) {
+			if (value == null || primaryColumn.contains(key)) {
 				continue;
 			}
-			Object value = set.getValue();
-			if (!Objects.isNull(value)) {
-				return true;
-			}
+			StringBuffer result = new StringBuffer(StringUtils.EMPTY);
+			result.append(key).append(EQUAL_SYMBOL).append(value);
+			set.add(result.toString());
 		}
-		return result;
+		return StringUtils.join(set, COMMA_SYMBOL);
+	}
+
+	private StringBuffer generateUpdateStatement(T bean) {
+		List<String> columnList = new ArrayList<String>();
+		List<Object> paramList = new ArrayList<Object>();
+
+		String tableName = getTableName(bean);
+		HashMap<Field, Object> fieldsMap = getFieldAndParamFromBean(
+				METHOD_TYPE._UPDATE, bean, columnList, paramList);
+
+		StringBuffer preparedStatement = new StringBuffer();
+		preparedStatement.append(UPDATE);
+		preparedStatement.append(tableName).append(SET);
+		preparedStatement.append(generateSetUpdate(columnList, paramList));
+		if (hashId(fieldsMap)) {
+			preparedStatement.append(generateWhereCauseById(fieldsMap));
+		} else {
+			preparedStatement.append(generateWhereCause(columnList, paramList));
+		}
+		return preparedStatement;
 	}
 
 	/**
@@ -480,42 +455,46 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 
 	}
 
-	private String generateSetUpdate(List<String> columnList,
-			List<Object> paramList) {
-
-		List<String> set = new ArrayList<String>();
-
-		if (columnList == null) {
-			return StringUtils.EMPTY;
-		}
-
-		int count = columnList.size();
-		for (int index = 0; index < count; index++) {
-			Object value = paramList.get(index);
-			String key = columnList.get(index);
-
-			if (value == null || primaryColumn.contains(key)) {
-				continue;
-			}
-			StringBuffer result = new StringBuffer(StringUtils.EMPTY);
-			result.append(key).append(EQUAL_SYMBOL).append(value);
-			set.add(result.toString());
-		}
-		return StringUtils.join(set, COMMA_SYMBOL);
-	}
-
 	/**
-	 * get table name from bean
 	 * 
-	 * @param bean
+	 * Mapping field between data base and bean.
+	 * 
+	 * Key = column name <br/>
+	 * Value = field name
+	 * 
+	 * @param clazz
 	 * @return
+	 * @throws IllegalAccessException
+	 * @throws InstantiationException
+	 * @throws SecurityException
 	 */
-	private String getTableName(T bean) {
-		Table table = bean.getClass().getAnnotation(Table.class);
-		String tableName = StringUtils.defaultString(table.name(), bean
-				.getClass().getName());
-		return tableName;
+	private HashMap<String, String> getColumnMappingWithField()
+			throws SecurityException, InstantiationException,
+			IllegalAccessException {
+		HashMap<String, String> result = new HashMap<String, String>();
+		Field[] fields = getType().newInstance().getClass().getDeclaredFields();
+
+		for (Field f : fields) {
+			Column column = f.getAnnotation(Column.class);
+			String key = "";
+			String value = f.getName();
+			if (column == null) {
+				key = f.getName();
+			} else {
+				key = column.name();
+			}
+			result.put(key, value);
+
+			Id id = f.getAnnotation(Id.class);
+			if (!Objects.isNull(id)) {
+				primaryColumn.add(key);
+			}
+		}
+
+		return result;
 	}
+
+	// ================ public ==============
 
 	/**
 	 * 
@@ -579,11 +558,54 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 
 	}
 
-	private Object prepareValue(Object value) {
-		if (isString(value) && value != null) {
-			value = "'" + value + "'";
+	// ================ private ==============
+
+	/**
+	 * get table name from bean
+	 * 
+	 * @param bean
+	 * @return
+	 */
+	private String getTableName(T bean) {
+		Table table = bean.getClass().getAnnotation(Table.class);
+		String tableName = StringUtils.defaultString(table.name(), bean
+				.getClass().getName());
+		return tableName;
+	}
+
+	public Class<T> getType() {
+		return this.type;
+	}
+
+	private Object getValueFromClass(T clazz, String columnName) {
+		Object result = null;
+		Field f;
+		try {
+			f = clazz.getClass().getDeclaredField(columnName);
+			f.setAccessible(true);// Very important, this allows the setting to
+			// work.
+			result = f.get(clazz);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
 		}
-		return value;
+		return result;
+	}
+
+	private boolean hashId(HashMap<Field, Object> fields) {
+		boolean result = false;
+		for (Entry<Field, Object> set : fields.entrySet()) {
+			Field field = set.getKey();
+			Id id = field.getAnnotation(Id.class);
+
+			if (Objects.isNull(id)) {
+				continue;
+			}
+			Object value = set.getValue();
+			if (!Objects.isNull(value)) {
+				return true;
+			}
+		}
+		return result;
 	}
 
 	private boolean isString(Object value) {
@@ -595,6 +617,157 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 			result = true;
 		}
 		return result;
+	}
+
+	@Override
+	public void multiDelete(List<T> t) throws Exception {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void multiSave(List<T> t) throws Exception {
+		StringBuffer finalStatement = new StringBuffer();
+		finalStatement = generateMultiStatement(METHOD_TYPE._SAVE, t,
+				finalStatement);
+		if (!StringUtils.isEmpty(finalStatement)) {
+			executeQuery(finalStatement.toString());
+		}
+	}
+
+	private StringBuffer generateMultiStatement(METHOD_TYPE method, List<T> t,
+			StringBuffer finalStatement) {
+		for (T item : t) {
+			StringBuffer singleStatement = new StringBuffer();
+
+			if (METHOD_TYPE._SAVE == method) {
+				singleStatement = generateSaveStatement(item);
+			} else if (METHOD_TYPE._UPDATE == method) {
+				singleStatement = generateUpdateStatement(item);
+			} else if (METHOD_TYPE._DELETE == method) {
+				List<String> opsDeleteColumn = null;
+				singleStatement = generateDeleteStatement(opsDeleteColumn, item);
+			} else {
+				return finalStatement;
+			}
+
+			if (StringUtils.isEmpty(singleStatement)) {
+				continue;
+			}
+			finalStatement.append(singleStatement);
+		}
+		if (StringUtils.isEmpty(finalStatement)) {
+			return finalStatement;
+		}
+		finalStatement = generateBatchStatement(finalStatement);
+		return finalStatement;
+	}
+
+	@Override
+	public void multiUpdate(List<T> t) throws Exception {
+		// TODO Auto-generated method stub
+
+	}
+
+	private StringBuffer generateBatchStatement(StringBuffer preStatement) {
+		/**
+		 * BEGIN BATCH INSERT INTO users (userID, password, name) VALUES
+		 * ('user2', 'ch@ngem3b', 'second user') UPDATE users SET password =
+		 * 'ps22dhds' WHERE userID = 'user2' INSERT INTO users (userID,
+		 * password) VALUES ('user3', 'ch@ngem3c') DELETE name FROM users WHERE
+		 * userID = 'user2' INSERT INTO users (userID, password, name) VALUES
+		 * ('user4', 'ch@ngem3c', 'Andrew') APPLY BATCH;
+		 */
+
+		preStatement.insert(0, BEGIN_BATCH);
+		preStatement.append(APPLY_BATCH);
+		return preStatement;
+	}
+
+	private Object prepareValue(Object value) {
+		if (isString(value) && value != null) {
+			value = "'" + value + "'";
+		}
+		return value;
+	}
+
+	private void printData(ColumnDefinitions columnDefinitions, List<T> listData)
+			throws SecurityException, InstantiationException,
+			IllegalAccessException {
+
+		for (Definition column : columnDefinitions) {
+			System.out.print(column.getName() + "|");
+		}
+		System.out.println("");
+		if (columns == null) {
+			columns = getColumnMappingWithField();
+		}
+		for (T data : listData) {
+			for (Definition column : columnDefinitions) {
+				System.out.print(getValueFromClass(data,
+						columns.get(column.getName()))
+						+ "|");
+			}
+			System.out.println("");
+		}
+	}
+
+	@Override
+	public void save(String query) throws Exception {
+		System.out.println("save query:" + query);
+		ResultSet resultSet = executeQuery(query);
+		System.out.println("result:" + resultSet);
+	}
+
+	@Override
+	public void save(T bean) throws Exception {
+
+		StringBuffer preparedStatement = generateSaveStatement(bean);
+		save(preparedStatement.toString());
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.dao.CommmonDAO#select(java.lang.String)
+	 */
+	@Override
+	public List<T> select(String query) throws Exception {
+		List<T> result = new ArrayList<T>();
+		ResultSet resultSet = executeQuery(query);
+		result = setDataToBean(resultSet);
+		printData(resultSet.getColumnDefinitions(), result);
+		return result;
+	}
+
+	@Override
+	public List<T> select(T bean) throws Exception {
+		List<T> result = new ArrayList<T>();
+		StringBuffer preparedStatement = generateSelectStatement(bean);
+		result = select(preparedStatement.toString());
+		return result;
+	}
+
+	/**
+	 * set value to field
+	 * 
+	 * @param clazz
+	 * @param fieldName
+	 * @param value
+	 * @return
+	 */
+	private T setDataToAttribute(T clazz, String fieldName, Object value) {
+
+		Field f;
+		try {
+			f = clazz.getClass().getDeclaredField(fieldName);
+			f.setAccessible(true);// Very important, this allows the setting to
+			// work.
+			f.set(clazz, value);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
+		return clazz;
 	}
 
 	/**
@@ -632,100 +805,18 @@ public abstract class CassandraDao<T> implements Connection, CommmonDAO<T> {
 		return result;
 	}
 
-	/**
-	 * 
-	 * Mapping field between data base and bean.
-	 * 
-	 * Key = column name <br/>
-	 * Value = field name
-	 * 
-	 * @param clazz
-	 * @return
-	 * @throws IllegalAccessException
-	 * @throws InstantiationException
-	 * @throws SecurityException
-	 */
-	private HashMap<String, String> getColumnMappingWithField()
-			throws SecurityException, InstantiationException,
-			IllegalAccessException {
-		HashMap<String, String> result = new HashMap<String, String>();
-		Field[] fields = getType().newInstance().getClass().getDeclaredFields();
-
-		for (Field f : fields) {
-			Column column = f.getAnnotation(Column.class);
-			String key = "";
-			String value = f.getName();
-			if (column == null) {
-				key = f.getName();
-			} else {
-				key = column.name();
-			}
-			result.put(key, value);
-
-			Id id = f.getAnnotation(Id.class);
-			if (!Objects.isNull(id)) {
-				primaryColumn.add(key);
-			}
-		}
-
-		return result;
+	@Override
+	public void update(String query) throws Exception {
+		System.out.println("update query:" + query);
+		ResultSet resultSet = executeQuery(query);
+		System.out.println("result:" + resultSet);
 	}
 
-	/**
-	 * set value to field
-	 * 
-	 * @param clazz
-	 * @param fieldName
-	 * @param value
-	 * @return
-	 */
-	private T setDataToAttribute(T clazz, String fieldName, Object value) {
+	@Override
+	public void update(T bean) throws Exception {
+		StringBuffer preparedStatement = generateUpdateStatement(bean);
 
-		Field f;
-		try {
-			f = clazz.getClass().getDeclaredField(fieldName);
-			f.setAccessible(true);// Very important, this allows the setting to
-			// work.
-			f.set(clazz, value);
-		} catch (Exception e) {
-			System.out.println(e.getMessage());
-		}
-		return clazz;
-	}
-
-	private void printData(ColumnDefinitions columnDefinitions, List<T> listData)
-			throws SecurityException, InstantiationException,
-			IllegalAccessException {
-
-		for (Definition column : columnDefinitions) {
-			System.out.print(column.getName() + "|");
-		}
-		System.out.println("");
-		if (columns == null) {
-			columns = getColumnMappingWithField();
-		}
-		for (T data : listData) {
-			for (Definition column : columnDefinitions) {
-				System.out.print(getValueFromClass(data,
-						columns.get(column.getName()))
-						+ "|");
-			}
-			System.out.println("");
-		}
-	}
-
-	private Object getValueFromClass(T clazz, String columnName) {
-		Object result = null;
-		Field f;
-		try {
-			f = clazz.getClass().getDeclaredField(columnName);
-			f.setAccessible(true);// Very important, this allows the setting to
-			// work.
-			result = f.get(clazz);
-		} catch (Exception e) {
-			System.out.println(e.getMessage());
-		}
-		return result;
+		update(preparedStatement.toString());
 	}
 
 }
